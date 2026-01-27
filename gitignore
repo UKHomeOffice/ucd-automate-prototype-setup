@@ -1,0 +1,14 @@
+# Ignore personal configuration (contains passwords and personal details)
+.prototype-config
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node modules (if you add any dependencies)
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
