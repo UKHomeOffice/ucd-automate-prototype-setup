@@ -44,7 +44,8 @@ read -p "Enter your GitHub username: " github_username
 
 # Default parent directory for prototypes
 read -p "Enter the default directory for prototypes (e.g., ~/Projects/prototypes): " parent_dir
-parent_dir="${parent_dir/#\~/$HOME}"  # Expand tilde
+parent_dir=$(eval echo "$parent_dir")  # Expand tilde and variables
+parent_dir="${parent_dir%/}"  # Remove trailing slash if present
 
 # Create parent directory if it doesn't exist
 if [ ! -d "$parent_dir" ]; then
