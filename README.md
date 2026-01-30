@@ -2,6 +2,8 @@
 
 Automated setup scripts for quickly creating new GOV.UK Prototype Kit projects with GitHub and Heroku integration.
 
+Created with AI assistance.
+
 ## 🎯 What This Does
 
 This automation handles all the repetitive tasks when starting a new prototype:
