@@ -26,6 +26,11 @@ fi
 # Load config
 source .prototype-config
 
+# Expand tilde and any variables in PARENT_DIR
+PARENT_DIR=$(eval echo "$PARENT_DIR")
+# Remove trailing slash if present
+PARENT_DIR="${PARENT_DIR%/}"
+
 # Get project name from argument or prompt
 if [ -z "$1" ]; then
     read -p "Enter project name (lowercase, hyphens only): " project_name
@@ -62,18 +67,6 @@ read -p "Heroku app name [default: $project_name]: " heroku_app
 heroku_app="${heroku_app:-$project_name}"
 
 echo ""
-read -p "Use default password? (y/n) [default: y]: " use_default_password
-use_default_password="${use_default_password:-y}"
-
-if [ "$use_default_password" != "y" ]; then
-    read -s -p "Enter custom password: " custom_password
-    echo ""
-    prototype_password="$custom_password"
-else
-    prototype_password="$DEFAULT_PASSWORD"
-fi
-
-echo ""
 read -p "Additional plugins (comma-separated, blank for defaults only): " additional_plugins
 
 # Combine plugins
@@ -104,67 +97,159 @@ echo "Creating prototype..."
 echo "======================================"
 echo ""
 
-# Step 1: Create directory
-echo -e "${YELLOW}[1/6]${NC} Creating directory..."
-mkdir -p "$project_dir"
-cd "$project_dir"
-echo -e "${GREEN}✅ Directory created${NC}"
+# Step 1: Prepare for prototype creation
+echo -e "${YELLOW}[1/6]${NC} Preparing prototype directory..."
+# Don't create the directory yet - let the kit create it
+parent_dir=$(dirname "$project_dir")
+project_name=$(basename "$project_dir")
+echo -e "${GREEN}✅ Ready to create: $project_dir${NC}"
 
 # Step 2: Install GOV.UK Prototype Kit
 echo ""
 echo -e "${YELLOW}[2/6]${NC} Installing GOV.UK Prototype Kit..."
-npx govuk-prototype-kit create --version latest .
-echo -e "${GREEN}✅ Prototype Kit installed${NC}"
+
+# Change to parent directory
+cd "$parent_dir"
+
+# Try the official create command - it will create the directory
+echo "  Running govuk-prototype-kit create..."
+if npx --yes govuk-prototype-kit@latest create "$project_name" 2>&1 | grep -v "npm WARN"; then
+    cd "$project_dir"
+    echo -e "${GREEN}✅ Prototype Kit installed with all defaults${NC}"
+else
+    echo -e "${YELLOW}⚠️  Standard installation had warnings, checking result...${NC}"
+    
+    # Check if directory was created
+    if [ -d "$project_dir" ]; then
+        cd "$project_dir"
+        
+        # Check if it has the necessary files
+        if [ -f "package.json" ] && [ -d "app" ]; then
+            echo -e "${GREEN}✅ Prototype Kit installed successfully${NC}"
+        else
+            echo -e "${RED}❌ Prototype Kit installation incomplete${NC}"
+            echo "Please try manual installation:"
+            echo "  cd $parent_dir"
+            echo "  npx govuk-prototype-kit create $project_name"
+            exit 1
+        fi
+    else
+        echo -e "${RED}❌ Failed to create prototype directory${NC}"
+        echo "Please try manual installation:"
+        echo "  cd $parent_dir"
+        echo "  npx govuk-prototype-kit create $project_name"
+        exit 1
+    fi
+fi
 
 # Step 3: Install plugins
 if [ -n "$all_plugins" ]; then
     echo ""
     echo -e "${YELLOW}[3/6]${NC} Installing plugins..."
     IFS=',' read -ra PLUGINS <<< "$all_plugins"
+    plugin_count=0
     for plugin in "${PLUGINS[@]}"; do
         plugin=$(echo "$plugin" | xargs) # Trim whitespace
         if [ -n "$plugin" ]; then
             echo "  Installing $plugin..."
-            npm install "$plugin" || echo -e "${RED}  ⚠️  Failed to install $plugin${NC}"
+            if npm install "$plugin" >/dev/null 2>&1; then
+                echo -e "  ${GREEN}✓${NC} $plugin installed"
+                ((plugin_count++))
+            else
+                echo -e "  ${RED}✗${NC} Failed to install $plugin"
+            fi
         fi
     done
-    echo -e "${GREEN}✅ Plugins installed${NC}"
+    if [ $plugin_count -gt 0 ]; then
+        echo -e "${GREEN}✅ Installed $plugin_count plugin(s)${NC}"
+    else
+        echo -e "${YELLOW}⚠️  No plugins were successfully installed${NC}"
+    fi
 else
     echo ""
     echo -e "${YELLOW}[3/6]${NC} No plugins to install"
 fi
 
-# Step 4: Set password
+# Step 4: Setup GitHub
 echo ""
-echo -e "${YELLOW}[4/6]${NC} Setting prototype password..."
-if [ -f ".env" ]; then
-    # Check if password already set
-    if grep -q "PASSWORD=" .env; then
-        sed -i '' "s/PASSWORD=.*/PASSWORD=$prototype_password/" .env
-    else
-        echo "PASSWORD=$prototype_password" >> .env
-    fi
-else
-    echo "PASSWORD=$prototype_password" > .env
-fi
-echo -e "${GREEN}✅ Password set${NC}"
+echo -e "${YELLOW}[4/5]${NC} Setting up GitHub repository..."
 
-# Step 5: Setup GitHub
-echo ""
-echo -e "${YELLOW}[5/6]${NC} Setting up GitHub repository..."
-git init
-git add .
-git commit -m "Initial commit - GOV.UK Prototype Kit setup"
+# Temporarily disable exit on error
+set +e
+
+# Check if git is already initialized
+if [ -d ".git" ]; then
+    echo "  Git already initialized by prototype kit"
+else
+    git init
+    echo "  Git repository initialized"
+fi
+
+# Ensure we're on main branch
+git branch -M main 2>/dev/null
+
+# Check if there are uncommitted changes
+if git diff-index --quiet HEAD -- 2>/dev/null; then
+    echo "  No uncommitted changes"
+else
+    # There are changes, commit them
+    git add .
+    git commit -m "Initial commit - GOV.UK Prototype Kit setup"
+    echo "  Changes committed"
+fi
+
+# Re-enable exit on error
+set -e
 
 # Create GitHub repo (using GitHub CLI if available, otherwise instructions)
 if command -v gh >/dev/null 2>&1; then
+    echo ""
+    echo "GitHub Account Setup:"
+    echo "  1. Personal account ($GITHUB_USERNAME)"
+    echo "  2. Organization account"
+    read -p "Select account type (1 or 2): " github_account_type
+    
+    github_org=""
+    github_owner="$GITHUB_USERNAME"
+    
+    if [ "$github_account_type" = "2" ]; then
+        echo ""
+        echo "Available GitHub organizations:"
+        gh org list 2>/dev/null || echo "  No organizations found or unable to list"
+        echo ""
+        read -p "Enter organization name: " github_org
+        github_owner="$github_org"
+    fi
+    
+    echo ""
     echo "  Creating GitHub repository..."
-    gh repo create "$github_repo" --private --source=. --remote=origin --push || {
-        echo -e "${RED}  ⚠️  Failed to create GitHub repo via CLI${NC}"
-        echo "  Please create manually at: https://github.com/new"
-        echo "  Then run: git remote add origin git@github.com:$GITHUB_USERNAME/$github_repo.git"
-        echo "            git push -u origin main"
-    }
+    
+    # Create repo with appropriate owner
+    if [ -n "$github_org" ]; then
+        # Create in organization
+        if gh repo create "$github_org/$github_repo" --private --source=. --remote=origin --push 2>&1; then
+            echo -e "${GREEN}✅ GitHub repository created: https://github.com/$github_org/$github_repo${NC}"
+            github_full_repo="$github_org/$github_repo"
+        else
+            echo -e "${RED}  ❌ Failed to create GitHub repo in organization${NC}"
+            echo "  Please create manually at: https://github.com/organizations/$github_org/repositories/new"
+            echo "  Then run: git remote add origin git@github.com:$github_org/$github_repo.git"
+            echo "            git push -u origin main"
+            github_full_repo="$github_org/$github_repo"
+        fi
+    else
+        # Create in personal account
+        if gh repo create "$github_repo" --private --source=. --remote=origin --push 2>&1; then
+            echo -e "${GREEN}✅ GitHub repository created: https://github.com/$GITHUB_USERNAME/$github_repo${NC}"
+            github_full_repo="$GITHUB_USERNAME/$github_repo"
+        else
+            echo -e "${RED}  ❌ Failed to create GitHub repo via CLI${NC}"
+            echo "  Please create manually at: https://github.com/new"
+            echo "  Then run: git remote add origin git@github.com:$GITHUB_USERNAME/$github_repo.git"
+            echo "            git push -u origin main"
+            github_full_repo="$GITHUB_USERNAME/$github_repo"
+        fi
+    fi
 else
     git branch -M main
     echo -e "${YELLOW}  GitHub CLI not found.${NC}"
@@ -177,62 +262,236 @@ else
     echo "  Then run these commands:"
     echo "    git remote add origin git@github.com:$GITHUB_USERNAME/$github_repo.git"
     echo "    git push -u origin main"
+    echo -e "${GREEN}✅ Git initialized locally${NC}"
+    github_full_repo="$GITHUB_USERNAME/$github_repo"
 fi
-echo -e "${GREEN}✅ Git initialized${NC}"
 
-# Step 6: Setup Heroku
+# Step 5: Setup Heroku
 echo ""
-echo -e "${YELLOW}[6/6]${NC} Setting up Heroku..."
+echo -e "${YELLOW}[5/5]${NC} Setting up Heroku..."
 if command -v heroku >/dev/null 2>&1; then
     # Check if logged in
     if heroku auth:whoami >/dev/null 2>&1; then
-        echo "  Creating Heroku app..."
-        heroku create "$heroku_app" || {
-            echo -e "${RED}  ⚠️  App name might be taken. Heroku will generate a random name.${NC}"
-            heroku create
-        }
         
-        # Add Node.js buildpack
-        heroku buildpacks:set heroku/nodejs
+        # Ask about account type
+        echo ""
+        echo "Heroku Account Setup:"
+        echo "  1. Personal account"
+        echo "  2. Team/Enterprise account"
+        read -p "Select account type (1 or 2): " account_type
         
-        # Set environment variables
-        heroku config:set NODE_ENV=production
-        heroku config:set PASSWORD="$prototype_password"
-        
-        # Connect to GitHub (if repo was created successfully)
-        if git remote get-url origin >/dev/null 2>&1; then
-            echo "  Deploying to Heroku..."
-            git push heroku main || echo -e "${YELLOW}  ⚠️  Push failed. You may need to enable Heroku-GitHub integration manually.${NC}"
-        else
-            echo -e "${YELLOW}  Skipping Heroku deployment - GitHub remote not configured${NC}"
+        heroku_team=""
+        if [ "$account_type" = "2" ]; then
+            echo ""
+            echo "Available Heroku teams:"
+            heroku teams 2>/dev/null || echo "  No teams found or unable to list teams"
+            echo ""
+            read -p "Enter team name: " heroku_team
         fi
         
-        echo -e "${GREEN}✅ Heroku app created${NC}"
+        # Ask about region
         echo ""
-        echo "  Heroku app URL: https://$heroku_app.herokuapp.com"
+        echo "Heroku Region:"
+        echo "  1. Europe (eu) - Frankfurt, Germany"
+        echo "  2. United States (us) - Virginia, USA"
+        echo "  3. Other (specify)"
+        read -p "Select region (1, 2, or 3) [default: 1]: " region_choice
+        region_choice="${region_choice:-1}"
+        
+        case "$region_choice" in
+            1)
+                heroku_region="eu"
+                ;;
+            2)
+                heroku_region="us"
+                ;;
+            3)
+                echo "Other available regions: tokyo, sydney, oregon, dublin"
+                read -p "Enter region code: " heroku_region
+                ;;
+            *)
+                heroku_region="eu"
+                echo "  Using default: eu"
+                ;;
+        esac
+        
+        echo ""
+        echo "  Creating Heroku app in $heroku_region region..."
+        
+        # Build heroku create command
+        create_cmd="heroku create $heroku_app --region $heroku_region"
+        if [ -n "$heroku_team" ]; then
+            create_cmd="$create_cmd --team $heroku_team"
+        fi
+        
+        # Create app
+        create_output=$($create_cmd 2>&1)
+        
+        # Check if creation was successful
+        if echo "$create_output" | grep -q "https://"; then
+            # Extract the actual app name from output
+            actual_app_name=$(echo "$create_output" | grep -oE 'https://[^.]+\.herokuapp\.com' | sed 's/https:\/\///' | sed 's/\.herokuapp\.com//')
+            if [ -z "$actual_app_name" ]; then
+                actual_app_name="$heroku_app"
+            fi
+            
+            echo -e "${GREEN}✅ Heroku app created: https://$actual_app_name.herokuapp.com${NC}"
+            echo -e "   Region: $heroku_region"
+            if [ -n "$heroku_team" ]; then
+                echo -e "   Team: $heroku_team"
+            fi
+            
+            # Save for summary section
+            HEROKU_APP_NAME="$actual_app_name"
+            
+            # Temporarily disable exit on error for non-critical config
+            set +e
+            
+            # Add Node.js buildpack
+            echo "  Configuring buildpack..."
+            if heroku buildpacks:set heroku/nodejs --app "$actual_app_name" 2>&1 | grep -q "Buildpack set\|buildpack is set"; then
+                echo -e "  ${GREEN}✓${NC} Buildpack configured"
+            else
+                echo -e "  ${YELLOW}⚠️  Buildpack may already be set${NC}"
+            fi
+            
+            # Prompt for password
+            echo ""
+            echo "  Setting up prototype password protection..."
+            read -s -p "  Enter password for your prototype: " prototype_password
+            echo ""
+            
+            # Validate password isn't empty
+            if [ -z "$prototype_password" ]; then
+                echo -e "  ${YELLOW}⚠️  No password entered - skipping password configuration${NC}"
+                echo "  You can set it later with: heroku config:set PASSWORD=your-password --app $actual_app_name"
+            else
+                # Set environment variables
+                echo ""
+                echo "  Configuring environment variables..."
+                
+                # Set NODE_ENV first
+                echo "  Setting NODE_ENV=production..."
+                if heroku config:set NODE_ENV=production --app "$actual_app_name" 2>&1 | grep -q "Setting\|NODE_ENV"; then
+                    echo -e "  ${GREEN}✓${NC} NODE_ENV set to production"
+                else
+                    echo -e "  ${RED}✗${NC} Failed to set NODE_ENV"
+                fi
+                
+                # Set PASSWORD separately
+                echo "  Setting PASSWORD..."
+                if heroku config:set PASSWORD="$prototype_password" --app "$actual_app_name" 2>&1 | grep -q "Setting\|PASSWORD"; then
+                    echo -e "  ${GREEN}✓${NC} PASSWORD configured"
+                else
+                    echo -e "  ${RED}✗${NC} Failed to set PASSWORD"
+                    echo "  Try manually: heroku config:set PASSWORD='your-password' --app $actual_app_name"
+                fi
+                
+                # Verify both variables are set
+                echo ""
+                echo "  Verifying configuration..."
+                sleep 1  # Brief pause to let Heroku propagate the config
+                
+                password_check=$(heroku config:get PASSWORD --app "$actual_app_name" 2>/dev/null)
+                node_env_check=$(heroku config:get NODE_ENV --app "$actual_app_name" 2>/dev/null)
+                
+                if [ -n "$password_check" ] && [ "$node_env_check" = "production" ]; then
+                    echo -e "  ${GREEN}✓${NC} Verified: Both environment variables are set correctly"
+                else
+                    echo -e "  ${YELLOW}⚠️  Warning: Could not verify all environment variables${NC}"
+                    if [ -z "$password_check" ]; then
+                        echo -e "  ${RED}✗${NC} PASSWORD is NOT set"
+                    fi
+                    if [ "$node_env_check" != "production" ]; then
+                        echo -e "  ${RED}✗${NC} NODE_ENV is NOT set to production"
+                    fi
+                    echo ""
+                    echo "  To check current config: heroku config --app $actual_app_name"
+                    echo "  To set manually: heroku config:set NODE_ENV=production PASSWORD='your-password' --app $actual_app_name"
+                fi
+            fi
+            
+            set -e  # Re-enable exit on error
+            
+            echo -e "${GREEN}✅ Heroku app created${NC}"
+            
+            # Deploy to Heroku
+            echo ""
+            echo "  Deploying to Heroku..."
+            
+            # Disable exit on error for git operations
+            set +e
+            
+            if git push heroku main 2>&1 | grep -E "deployed to Heroku|Verifying deploy|remote:|https://" | tail -5; then
+                echo ""
+                echo -e "${GREEN}✅ Successfully deployed to Heroku${NC}"
+                echo -e "   Your prototype is live at: https://$actual_app_name.herokuapp.com"
+            else
+                echo ""
+                echo -e "${YELLOW}⚠️  Deployment may have failed${NC}"
+                echo "   Try manually: cd $project_dir && git push heroku main"
+            fi
+            
+            set -e  # Re-enable exit on error
+            
+            # Save app details for summary
+            heroku_app_url="https://$actual_app_name.herokuapp.com"
+            heroku_dashboard_url="https://dashboard.heroku.com/apps/$actual_app_name"
+            heroku_github_integration_url="https://dashboard.heroku.com/apps/$actual_app_name/deploy"
+            
+        else
+            echo -e "${RED}  ❌ Failed to create Heroku app${NC}"
+            echo "  Error: $create_output"
+            if echo "$create_output" | grep -q "Name is already taken"; then
+                echo "  The app name '$heroku_app' is already taken."
+                echo "  Try a different name or let Heroku generate one."
+            fi
+        fi
     else
-        echo -e "${RED}  ⚠️  Not logged into Heroku. Run 'heroku login' first.${NC}"
-        echo "  Then manually create app: heroku create $heroku_app"
+        echo -e "${RED}  ❌ Not logged into Heroku${NC}"
+        echo "  Run 'heroku login' first"
+        echo ""
+        echo "  For enterprise accounts, you may need:"
+        echo "    heroku login --sso"
     fi
 else
-    echo -e "${RED}  ⚠️  Heroku CLI not installed${NC}"
+    echo -e "${RED}  ❌ Heroku CLI not installed${NC}"
     echo "  Install from: https://devcenter.heroku.com/articles/heroku-cli"
 fi
 
 echo ""
 echo "======================================"
-echo -e "${GREEN}✅ Project created successfully!${NC}"
+echo -e "${GREEN}✅ Setup Complete!${NC}"
 echo "======================================"
 echo ""
-echo "Project details:"
-echo "  📁 Location: $project_dir"
-echo "  🔗 GitHub: https://github.com/$GITHUB_USERNAME/$github_repo"
-echo "  🚀 Heroku: https://$heroku_app.herokuapp.com"
+echo "Summary:"
+echo -e "  📁 Directory: ${GREEN}$project_dir${NC}"
+
+# Check if GitHub remote exists
+if git remote get-url origin >/dev/null 2>&1; then
+    github_url=$(git remote get-url origin | sed 's/git@github.com:/https:\/\/github.com\//' | sed 's/\.git$//')
+    echo -e "  🔗 GitHub: ${GREEN}$github_url${NC}"
+else
+    echo -e "  🔗 GitHub: ${YELLOW}Not yet configured${NC}"
+fi
+
+# Check if Heroku app was created
+if [ -n "$HEROKU_APP_NAME" ]; then
+    echo -e "  🚀 Heroku: ${GREEN}https://$HEROKU_APP_NAME.herokuapp.com${NC}"
+else
+    echo -e "  🚀 Heroku: ${YELLOW}Not configured${NC}"
+fi
+
 echo ""
+
 echo "Next steps:"
 echo "  1. cd $project_dir"
 echo "  2. npm run dev"
 echo "  3. Open http://localhost:3000"
-echo ""
-echo "The prototype password is: $prototype_password"
-echo ""
+echo "  4. Set up automatic deploys from Github in the Heroku app"
+
+if [ -n "$HEROKU_APP_NAME" ]; then
+    echo -e "Your prototype is live at: ${GREEN}https://$HEROKU_APP_NAME.herokuapp.com${NC}"
+    echo ""
+
+fi
