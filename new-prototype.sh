@@ -67,22 +67,11 @@ read -p "Heroku app name [default: $project_name]: " heroku_app
 heroku_app="${heroku_app:-$project_name}"
 
 echo ""
-read -p "Additional plugins (comma-separated, blank for defaults only): " additional_plugins
-
-# Combine plugins
-if [ -n "$additional_plugins" ]; then
-    all_plugins="$DEFAULT_PLUGINS,$additional_plugins"
-else
-    all_plugins="$DEFAULT_PLUGINS"
-fi
-
-echo ""
 echo -e "${YELLOW}Review settings:${NC}"
 echo "  Project: $project_name"
 echo "  Directory: $project_dir"
 echo "  GitHub repo: $GITHUB_USERNAME/$github_repo"
 echo "  Heroku app: $heroku_app"
-echo "  Plugins: ${all_plugins:-none}"
 echo ""
 
 read -p "Proceed with creation? (y/n): " proceed
@@ -98,7 +87,7 @@ echo "======================================"
 echo ""
 
 # Step 1: Prepare for prototype creation
-echo -e "${YELLOW}[1/6]${NC} Preparing prototype directory..."
+echo -e "${YELLOW}[1/4]${NC} Preparing prototype directory..."
 # Don't create the directory yet - let the kit create it
 parent_dir=$(dirname "$project_dir")
 project_name=$(basename "$project_dir")
@@ -106,7 +95,7 @@ echo -e "${GREEN}✅ Ready to create: $project_dir${NC}"
 
 # Step 2: Install GOV.UK Prototype Kit
 echo ""
-echo -e "${YELLOW}[2/6]${NC} Installing GOV.UK Prototype Kit..."
+echo -e "${YELLOW}[2/4]${NC} Installing GOV.UK Prototype Kit..."
 
 # Change to parent directory
 cd "$parent_dir"
@@ -142,37 +131,9 @@ else
     fi
 fi
 
-# Step 3: Install plugins
-if [ -n "$all_plugins" ]; then
-    echo ""
-    echo -e "${YELLOW}[3/6]${NC} Installing plugins..."
-    IFS=',' read -ra PLUGINS <<< "$all_plugins"
-    plugin_count=0
-    for plugin in "${PLUGINS[@]}"; do
-        plugin=$(echo "$plugin" | xargs) # Trim whitespace
-        if [ -n "$plugin" ]; then
-            echo "  Installing $plugin..."
-            if npm install "$plugin" >/dev/null 2>&1; then
-                echo -e "  ${GREEN}✓${NC} $plugin installed"
-                ((plugin_count++))
-            else
-                echo -e "  ${RED}✗${NC} Failed to install $plugin"
-            fi
-        fi
-    done
-    if [ $plugin_count -gt 0 ]; then
-        echo -e "${GREEN}✅ Installed $plugin_count plugin(s)${NC}"
-    else
-        echo -e "${YELLOW}⚠️  No plugins were successfully installed${NC}"
-    fi
-else
-    echo ""
-    echo -e "${YELLOW}[3/6]${NC} No plugins to install"
-fi
-
-# Step 4: Setup GitHub
+# Step 3: Setup GitHub
 echo ""
-echo -e "${YELLOW}[4/5]${NC} Setting up GitHub repository..."
+echo -e "${YELLOW}[3/4]${NC} Setting up GitHub repository..."
 
 # Temporarily disable exit on error
 set +e
@@ -266,67 +227,60 @@ else
     github_full_repo="$GITHUB_USERNAME/$github_repo"
 fi
 
-# Step 5: Setup Heroku
+# Step 4: Setup Heroku
 echo ""
-echo -e "${YELLOW}[5/5]${NC} Setting up Heroku..."
+echo -e "${YELLOW}[4/4]${NC} Setting up Heroku..."
 if command -v heroku >/dev/null 2>&1; then
     # Check if logged in
     if heroku auth:whoami >/dev/null 2>&1; then
-        
+
         # Ask about account type
         echo ""
         echo "Heroku Account Setup:"
         echo "  1. Personal account"
         echo "  2. Team/Enterprise account"
         read -p "Select account type (1 or 2): " account_type
-        
+
         heroku_team=""
+        heroku_region="eu"
+
         if [ "$account_type" = "2" ]; then
             echo ""
             echo "Available Heroku teams:"
             heroku teams 2>/dev/null || echo "  No teams found or unable to list teams"
             echo ""
             read -p "Enter team name: " heroku_team
+
+            # Ask about region (only for team/enterprise accounts)
+            echo ""
+            echo "Heroku Region:"
+            echo "  1. Europe (eu) - Frankfurt, Germany [default]"
+            echo "  2. United States (us) - Virginia, USA"
+            read -p "Select region (1 or 2) [default: 1 - EU]: " region_choice
+            region_choice="${region_choice:-1}"
+
+            case "$region_choice" in
+                2)
+                    heroku_region="us"
+                    ;;
+                *)
+                    heroku_region="eu"
+                    ;;
+            esac
         fi
-        
-        # Ask about region
-        echo ""
-        echo "Heroku Region:"
-        echo "  1. Europe (eu) - Frankfurt, Germany"
-        echo "  2. United States (us) - Virginia, USA"
-        echo "  3. Other (specify)"
-        read -p "Select region (1, 2, or 3) [default: 1]: " region_choice
-        region_choice="${region_choice:-1}"
-        
-        case "$region_choice" in
-            1)
-                heroku_region="eu"
-                ;;
-            2)
-                heroku_region="us"
-                ;;
-            3)
-                echo "Other available regions: tokyo, sydney, oregon, dublin"
-                read -p "Enter region code: " heroku_region
-                ;;
-            *)
-                heroku_region="eu"
-                echo "  Using default: eu"
-                ;;
-        esac
-        
+
         echo ""
         echo "  Creating Heroku app in $heroku_region region..."
-        
+
         # Build heroku create command
         create_cmd="heroku create $heroku_app --region $heroku_region"
         if [ -n "$heroku_team" ]; then
             create_cmd="$create_cmd --team $heroku_team"
         fi
-        
+
         # Create app
         create_output=$($create_cmd 2>&1)
-        
+
         # Check if creation was successful
         if echo "$create_output" | grep -q "https://"; then
             # Extract the actual app name from output
@@ -334,19 +288,19 @@ if command -v heroku >/dev/null 2>&1; then
             if [ -z "$actual_app_name" ]; then
                 actual_app_name="$heroku_app"
             fi
-            
+
             echo -e "${GREEN}✅ Heroku app created: https://$actual_app_name.herokuapp.com${NC}"
             echo -e "   Region: $heroku_region"
             if [ -n "$heroku_team" ]; then
                 echo -e "   Team: $heroku_team"
             fi
-            
+
             # Save for summary section
             HEROKU_APP_NAME="$actual_app_name"
-            
+
             # Temporarily disable exit on error for non-critical config
             set +e
-            
+
             # Add Node.js buildpack
             echo "  Configuring buildpack..."
             if heroku buildpacks:set heroku/nodejs --app "$actual_app_name" 2>&1 | grep -q "Buildpack set\|buildpack is set"; then
@@ -354,66 +308,13 @@ if command -v heroku >/dev/null 2>&1; then
             else
                 echo -e "  ${YELLOW}⚠️  Buildpack may already be set${NC}"
             fi
-            
-            # Prompt for password
-            echo ""
-            echo "  Setting up prototype password protection..."
-            read -s -p "  Enter password for your prototype: " prototype_password
-            echo ""
-            
-            # Validate password isn't empty
-            if [ -z "$prototype_password" ]; then
-                echo -e "  ${YELLOW}⚠️  No password entered - skipping password configuration${NC}"
-                echo "  You can set it later with: heroku config:set PASSWORD=your-password --app $actual_app_name"
-            else
-                # Set environment variables
-                echo ""
-                echo "  Configuring environment variables..."
-                
-                # Set NODE_ENV first
-                echo "  Setting NODE_ENV=production..."
-                if heroku config:set NODE_ENV=production --app "$actual_app_name" 2>&1 | grep -q "Setting\|NODE_ENV"; then
-                    echo -e "  ${GREEN}✓${NC} NODE_ENV set to production"
-                else
-                    echo -e "  ${RED}✗${NC} Failed to set NODE_ENV"
-                fi
-                
-                # Set PASSWORD separately
-                echo "  Setting PASSWORD..."
-                if heroku config:set PASSWORD="$prototype_password" --app "$actual_app_name" 2>&1 | grep -q "Setting\|PASSWORD"; then
-                    echo -e "  ${GREEN}✓${NC} PASSWORD configured"
-                else
-                    echo -e "  ${RED}✗${NC} Failed to set PASSWORD"
-                    echo "  Try manually: heroku config:set PASSWORD='your-password' --app $actual_app_name"
-                fi
-                
-                # Verify both variables are set
-                echo ""
-                echo "  Verifying configuration..."
-                sleep 1  # Brief pause to let Heroku propagate the config
-                
-                password_check=$(heroku config:get PASSWORD --app "$actual_app_name" 2>/dev/null)
-                node_env_check=$(heroku config:get NODE_ENV --app "$actual_app_name" 2>/dev/null)
-                
-                if [ -n "$password_check" ] && [ "$node_env_check" = "production" ]; then
-                    echo -e "  ${GREEN}✓${NC} Verified: Both environment variables are set correctly"
-                else
-                    echo -e "  ${YELLOW}⚠️  Warning: Could not verify all environment variables${NC}"
-                    if [ -z "$password_check" ]; then
-                        echo -e "  ${RED}✗${NC} PASSWORD is NOT set"
-                    fi
-                    if [ "$node_env_check" != "production" ]; then
-                        echo -e "  ${RED}✗${NC} NODE_ENV is NOT set to production"
-                    fi
-                    echo ""
-                    echo "  To check current config: heroku config --app $actual_app_name"
-                    echo "  To set manually: heroku config:set NODE_ENV=production PASSWORD='your-password' --app $actual_app_name"
-                fi
-            fi
-            
+
             set -e  # Re-enable exit on error
-            
+
             echo -e "${GREEN}✅ Heroku app created${NC}"
+            echo ""
+            echo -e "  ${YELLOW}Note:${NC} Set a password for your prototype with:"
+            echo "  heroku config:set NODE_ENV=production PASSWORD='your-password' --app $actual_app_name"
             
             # Deploy to Heroku
             echo ""
