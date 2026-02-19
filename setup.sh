@@ -33,7 +33,11 @@ echo "✅ git found"
 command -v npm >/dev/null 2>&1 || { echo "❌ npm is not installed. Please install Node.js first."; exit 1; }
 echo "✅ npm found"
 
-command -v heroku >/dev/null 2>&1 || { echo "⚠️  heroku CLI not found. Install from: https://devcenter.heroku.com/articles/heroku-cli"; }
+command -v heroku >/dev/null 2>&1 || { echo "❌ heroku CLI is not installed. Install from: https://devcenter.heroku.com/articles/heroku-cli"; exit 1; }
+echo "✅ heroku found"
+
+command -v gh >/dev/null 2>&1 || { echo "❌ GitHub CLI (gh) is not installed. Install from: https://cli.github.com/"; exit 1; }
+echo "✅ GitHub CLI found"
 
 echo ""
 echo "Collecting your configuration..."
@@ -59,20 +63,6 @@ fi
 # Heroku account email
 read -p "Enter your Heroku account email: " heroku_email
 
-# Default plugins (comma-separated)
-echo ""
-echo "Enter any default plugins to install (comma-separated)."
-echo "Example: govuk-prototype-kit-step-by-step,govuk-prototype-kit-common-templates"
-echo "Leave blank if none:"
-read -p "Default plugins: " default_plugins
-
-# Default prototype password
-echo ""
-echo "Enter a default password for prototypes (you can override per-project)."
-echo "This will be stored locally only - never committed to git."
-read -s -p "Default prototype password: " default_password
-echo ""
-
 # Write config file
 cat > .prototype-config << EOF
 # GOV.UK Prototype Kit Configuration
@@ -82,8 +72,6 @@ cat > .prototype-config << EOF
 GITHUB_USERNAME="$github_username"
 PARENT_DIR="$parent_dir"
 HEROKU_EMAIL="$heroku_email"
-DEFAULT_PLUGINS="$default_plugins"
-DEFAULT_PASSWORD="$default_password"
 EOF
 
 echo ""
