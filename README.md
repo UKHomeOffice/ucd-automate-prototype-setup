@@ -1,22 +1,22 @@
 # GOV.UK Prototype Kit - Project Automation
 
-This is an automated setup script for quickly creating new GOV.UK Prototype Kit with GitHub and Heroku integration.
+This is a set of scripts for automating the setup of a new GOV.UK Prototype Kit with GitHub and Heroku integration.
 
 Created with AI assistance.
 
 ## 🎯 What This Does
 
-This handles some of repetitive tasks when starting a new prototype so you can get up an running quickly:
+This handles repetitive tasks when starting a new prototype so you can get up an running quickly. After a 1-time setup, it will:
 
-1. ✅ Creates a project directory on your local machine
-2. ✅ Installs a fresh version of the GOV.UK Prototype Kit into it
-4. ✅ Initializes a Git repo
+1. ✅ Create a project directory on your local machine
+2. ✅ Install a fresh version of the GOV.UK Prototype Kit into it
+4. ✅ Initialise a Git repo
 5. ✅ Creates GitHub repository
-6. ✅ Sets up Heroku app
+6. ✅ Sets up a Heroku app
 
-You then just need to:
-1. Login to your Heroku account to set up a password
-2. And optionally connect Github to Heroku for automatic deployments 
+You then just need to manually:
+1. Set up a password for your prototype
+2. Optionally connect Github to Heroku for automatic deployments 
 
 ## 📋 BEFORE YOU START
 
@@ -33,7 +33,7 @@ Before using this tool, ensure you have:
     - Recommend installation via via Homebrew `brew install heroku/brew/heroku`
     - Then login on the command line `heroku login`
 
-### Verify everything is installaedPrerequisites
+### Verify everything is installaed
 
 ```bash
 node --version    # Should be v18 or higher
@@ -42,25 +42,25 @@ heroku --version  # Any recent version
 gh --version      # Any recent version
 ```
 
-## 🚀 FIRST TIME SETUP
+## First time setup
 
 You will only have to do these steps once on your computer.
 
-### 1. Clone or Download This Repository
+### 1. Clone or download this repository
 
 ```bash
 git clone <your-repo-url>
 cd <your cloned or downloaded folder>
 ```
 
-### 2. Make Scripts Executable
+### 2. Make scripts executable
 
 ```bash
 chmod +x setup.sh
 chmod +x new-prototype.sh
 ```
 
-### 3. Run Initial Setup
+### 3. Run initial setup
 
 This stores some preferences for every subsequent time you run the script. 
 
@@ -76,14 +76,16 @@ You'll be prompted for:
 
 **Important:** These settings are saved in `.prototype-config` which is gitignored and **never committed** to version control.
 
-## 📦 HOW TO SETUP A NEW PROTOTYPE
+## How to set up a new project
 
-Follow these instructions every time you start a new project.
+Follow these instructions everytime you start a new project.
+
+In terminal run the `./new-prototype.sh` script and give your project a lower case name - this will be used for the project folder name
 
 ```bash
 ./new-prototype.sh my-project-name
 ```
-Because this works with your saved folder path in setup file, you don't need to specify the full path
+This works with your saved folder path in setup file, you don't need to specify the full path
 
 Or run without arguments to be prompted:
 
@@ -91,7 +93,7 @@ Or run without arguments to be prompted:
 ./new-prototype.sh
 ```
 
-### What You'll Be Asked
+### What you'll be asked
 
 1. **Project name** - Lowercase with hyphens (e.g., `passport-checker`)
 2. **GitHub repo name** - Defaults to project name, press enter to just use default
@@ -100,7 +102,7 @@ Or run without arguments to be prompted:
 5. **Heroku app name** - Defaults to project name
 6. **Heroku account type** - Personal or Team/Enterprise
 7. **Heroku team name** - If using Team/Enterprise account
-8. **Heroku region** - If using Heroku Enterprise, Where your app will be hosted:
+8. **Heroku region** - If using Heroku Enterprise, shere your app will be hosted:
    - Europe (eu) - Frankfurt, Germany [default]
    - United States (us) - Virginia, USA
    - Other (tokyo, sydney, oregon, dublin)
@@ -127,10 +129,10 @@ The script supports both personal and organisation GitHub accounts:
 
 ### Heroku Region Selection
 
-Choose the region closest to your users for best performance:
+Usually you should choose Europe, but it will prompt you for whatever region is available
+
 - **Europe (eu)**: For UK/European users [recommended for Home Office]
 - **United States (us)**: For US users
-- **Other**: Tokyo, Sydney, Oregon, Dublin
 
 ### Heroku Setup
 
@@ -143,7 +145,7 @@ The script supports both personal and enterprise Heroku accounts:
 **Team/Enterprise Account:**
 - Select option 2 when prompted
 - Script lists available teams
-- Enter team name (e.g., `home-office-digital`)
+- Enter team name (e.g., `my-teams-apps`)
 - App created under team account
 
 ## 🔧 Configuration
@@ -164,7 +166,7 @@ Simply run setup again:
 
 ### Configuration File Structure
 
-Your `.prototype-config` contains:
+Your `.prototype-config` contains, you can edit it whenever you need:
 
 ```bash
 GITHUB_USERNAME="your-username"
@@ -185,7 +187,7 @@ Here are some commonly used GOV.UK Prototype Kit plugins:
 
 Add these during setup or per-project as needed.
 
-## 🔒 Security
+## Security
 
 ### What's Safe to Commit
 
@@ -204,7 +206,7 @@ Add these during setup or per-project as needed.
 - `node_modules/` - If you add any
 
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### "Permission denied" when running scripts
 
@@ -263,24 +265,11 @@ git pull origin main
 
 Your personal `.prototype-config` won't be affected.
 
-## 📚 Additional Resources
-
-- [GOV.UK Prototype Kit Documentation](https://prototype-kit.service.gov.uk/)
-- [GitHub CLI Documentation](https://cli.github.com/)
-- [Heroku CLI Documentation](https://devcenter.heroku.com/articles/heroku-cli)
-
-## 💡 Tips
-
-1. **Use descriptive project names** - They become your repo and app names
-2. **Test locally first** - Run `npm run dev` before relying on Heroku deployment
-3. **Keep plugins consistent** - Set common plugins in defaults to save time
-4. **Document custom changes** - If you modify the scripts, update this README
-
-## 🤝 Contributing
+## Contributing
 
 If you make improvements to these scripts:
 
 1. Test thoroughly on your own projects
 2. Update the README with any new features
 3. Ensure no personal configuration leaks into commits
-4. Share back with the team via pull request
+4. Share back via a pull request
