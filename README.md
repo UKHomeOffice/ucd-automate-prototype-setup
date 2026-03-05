@@ -46,7 +46,7 @@ gh --version      # Any recent version
 
 You will only have to do these steps once on your computer.
 
-### 1. Clone or download this repository
+### 1. Clone or download a copy of this repository
 
 ```bash
 git clone <your-repo-url>
