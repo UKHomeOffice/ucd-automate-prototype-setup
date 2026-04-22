@@ -6,25 +6,47 @@ Scripts to quickly create new GOV.UK Prototype Kit projects with GitHub and Hero
 
 You **must** have all of the following installed before using these scripts:
 
-- **Node.js** v18 or higher — [Install](https://nodejs.org/)
-- **Git** — usually pre-installed on macOS
-- **GitHub CLI** (`gh`) — [Install](https://cli.github.com/) (recommended via Homebrew: `brew install gh`)
-- **Heroku CLI** — [Install](https://devcenter.heroku.com/articles/heroku-cli)
+This handles repetitive tasks when starting a new prototype so you can get up an running quickly. After a 1-time setup, it will:
 
-Verify everything is installed:
+1. ✅ Create a project directory on your local machine
+2. ✅ Install a fresh version of the GOV.UK Prototype Kit into it
+4. ✅ Initialise a Git repo
+5. ✅ Creates GitHub repository
+6. ✅ Sets up a Heroku app
+
+You then just need to manually:
+1. Set up a password for your prototype
+2. Optionally connect Github to Heroku for automatic deployments 
+
+## 📋 BEFORE YOU START
+
+Before using this tool, ensure you have:
+
+- **macOS** (tested on macOS 10.15+)
+- **Node.js** (v18 or higher) - [Install](https://nodejs.org/)
+- **Git** - Usually pre-installed on macOS
+- **A GitHub account** with GitHub command line tool installed locally 
+    - Recommend [installation via Homebrew](https://brew.sh/)
+    - After homebrew is installed, install Github CLI via `brew install gh`
+    - Then login on the command line `gh auth login`
+- **A Heroku account** and Heroku CLI
+    - Recommend installation via via Homebrew `brew install heroku/brew/heroku`
+    - Then login on the command line `heroku login`
+
+### Verify everything is installaed
 
 ```bash
-node --version     # v18 or higher
-git --version
-gh --version
-heroku --version
+node --version    # Should be v18 or higher
+git --version     # Any recent version
+heroku --version  # Any recent version
+gh --version      # Any recent version
 ```
 
-## One-time setup
+## First time setup
 
-You only need to do this once.
+You will only have to do these steps once on your computer.
 
-### 1. Clone this repository
+### 1. Clone or download a copy of this repository
 
 ```bash
 git clone <your-repo-url>
